@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   stepText: { fontSize: 26, fontWeight: '600' },
   count: { fontSize: 16, fontWeight: '700', minWidth: 72, textAlign: 'center' },
   rollBtn: {
-    alignSelf: 'stretch',
+    alignSelf: 'center',
     maxWidth: 480,
     width: '100%',
     height: 64,
