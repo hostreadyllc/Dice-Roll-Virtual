@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Signing keys (only the encrypted copy in signing/ is committed)
+*.jks
+*.keystore
+!signing/*.enc

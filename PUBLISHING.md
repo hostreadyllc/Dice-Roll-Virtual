@@ -63,27 +63,39 @@ The app reads the real price from the store automatically.
 
 ---
 
-## 5. Log in to EAS
+## 5. One-time setup: let GitHub sign the Play version
 
-```bash
-npm install
-npx eas-cli@latest login
-npx eas-cli@latest init        # links the project to your Expo account
-```
+The app's **upload key** is stored encrypted in `signing/upload-keystore.jks.enc`.
+GitHub needs its password to build signed bundles:
+
+1. On GitHub, open the repo → **Settings** → **Secrets and variables** → **Actions**.
+2. Click **New repository secret**.
+3. Name: `UPLOAD_KEYSTORE_PASSWORD` — Value: the upload key password you were given.
+4. Click **Add secret**.
+
+Keep a backup of the password and of `upload-keystore.jks` somewhere safe (a password manager).
+If they're ever lost, Google can reset the upload key — see "Request upload key reset" in Play Console.
 
 ---
 
 ## 6. Build
 
-```bash
-# Android (.aab for Google Play)
-npx eas-cli@latest build --platform android --profile production
+Every push to `main` builds automatically. On the newest release (repo → **Releases**) you'll find:
 
-# iOS (EAS will ask to sign in to your Apple account and create certificates for you)
-npx eas-cli@latest build --platform ios --profile production
-```
+| File | Use |
+|---|---|
+| `DiceRoller-PlayStore-v…-code….aab` | **Upload this to Google Play** |
+| `DiceRoller-v…-build….apk` | Install directly on your phone for testing |
 
-Builds run in the cloud and take ~10–20 minutes.
+To build without changing code: repo → **Actions** → **Build Android APK** → **Run workflow**.
+
+Each build gets a higher version code automatically, which Google Play requires for every upload.
+
+**Upload to Google Play:** Play Console → your app → **Test and release** → **Testing** → **Internal testing**
+(or Closed testing) → **Create new release** → upload the `.aab`. When asked, keep
+**Play App Signing** turned on (Google manages the final signing key).
+
+**iOS** builds still use EAS: `npx eas-cli@latest build --platform ios --profile production`.
 
 ---
 
@@ -99,7 +111,6 @@ Check that: buying unlocks the themes, closing and reopening keeps them unlocked
 ## 8. Submit
 
 ```bash
-npx eas-cli@latest submit --platform android
 npx eas-cli@latest submit --platform ios
 ```
 

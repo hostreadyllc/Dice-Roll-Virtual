@@ -181,3 +181,87 @@ jobs:
             cp logcat2.txt "logcat-api${{ matrix.api-level }}.txt"
             gh release upload "test-build-${{ github.run_number }}" "emulator-api${{ matrix.api-level }}.png" "logcat-api${{ matrix.api-level }}.txt" --clobber -R "${{ github.repository }}" || true
           fi
+
+  # Signed Android App Bundle (.aab) for uploading to Google Play.
+  # Needs the repository secret UPLOAD_KEYSTORE_PASSWORD (see PUBLISHING.md).
+  play-bundle:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_ENV: production
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+    steps:
+      - name: Check signing secret
+        id: secret
+        env:
+          PW: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::warning title=Play bundle skipped::Add the UPLOAD_KEYSTORE_PASSWORD repository secret to build the Google Play .aab (see PUBLISHING.md)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.secret.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Install dependencies
+        if: steps.secret.outputs.ok == 'true'
+        run: npm ci
+
+      - name: Set version code
+        if: steps.secret.outputs.ok == 'true'
+        id: ver
+        run: |
+          CODE=$((100 + ${{ github.run_number }}))
+          node -e "const f='app.json',a=require('./'+f);a.expo.android.versionCode=$CODE;require('fs').writeFileSync(f,JSON.stringify(a,null,2))"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      - name: Unlock upload key
+        if: steps.secret.outputs.ok == 'true'
+        env:
+          PW: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in signing/upload-keystore.jks.enc -out "$RUNNER_TEMP/upload.jks" -pass env:PW
+
+      - name: Generate Android project
+        if: steps.secret.outputs.ok == 'true'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build signed bundle
+        if: steps.secret.outputs.ok == 'true'
+        working-directory: android
+        env:
+          UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
+          UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: upload
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Check signature and attach to release
+        if: steps.secret.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verify -verbose -certs "$AAB" | grep -m1 "CN=Host Ready LLC" \
+            || { echo "::error::Bundle is not signed with the upload key"; exit 1; }
+          NAME="DiceRoller-PlayStore-v${{ steps.ver.outputs.version }}-code${{ steps.ver.outputs.code }}.aab"
+          cp "$AAB" "$NAME"
+          gh release upload "test-build-${{ github.run_number }}" "$NAME" --clobber -R "${{ github.repository }}"
+          echo "::notice title=Play bundle ready::$NAME (version code ${{ steps.ver.outputs.code }})"

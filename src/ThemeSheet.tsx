@@ -22,6 +22,8 @@ type Props = {
   priceLabel: string;
   busy: boolean;
   testMode: boolean;
+  /** False in store builds before in-app purchases are set up: show 'coming soon'. */
+  purchasable: boolean;
   onClose: () => void;
   onSelectTheme: (t: Theme) => void;
   onUnlock: () => void;
@@ -95,7 +97,15 @@ export default function ThemeSheet(p: Props) {
           </View>
 
           <Text style={[styles.section, { color: ui.muted }]}>PREMIUM</Text>
-          {!p.premium && (
+          {!p.premium && !p.purchasable && (
+            <View style={[styles.unlockCard, { backgroundColor: ui.card }]}>
+              <Text style={[styles.unlockTitle, { color: ui.text }]}>Premium themes coming soon</Text>
+              <Text style={[styles.unlockSub, { color: ui.muted, marginBottom: 0 }]}>
+                {paid.length} more looks, including Gold Luxe, Neon Arcade and Galaxy.
+              </Text>
+            </View>
+          )}
+          {!p.premium && p.purchasable && (
             <View style={[styles.unlockCard, { backgroundColor: ui.card }]}>
               <Text style={[styles.unlockTitle, { color: ui.text }]}>
                 Unlock all {paid.length} premium themes
@@ -130,7 +140,7 @@ export default function ThemeSheet(p: Props) {
           <View style={styles.grid}>
             {paid.map((t) => (
               <Swatch key={t.id} t={t} ui={ui} selected={t.id === ui.id} locked={!p.premium}
-                onPress={() => p.onSelectTheme(t)} />
+                onPress={() => (p.purchasable ? p.onSelectTheme(t) : undefined)} />
             ))}
           </View>
 

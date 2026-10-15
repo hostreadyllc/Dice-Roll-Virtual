@@ -61,7 +61,7 @@ class Fallback3D extends React.Component<
     return this.state.failed ? this.props.fallback : this.props.children;
   }
 }
-import { allowTestUnlock, buyPremium, initStore, isTestMode, restorePremium } from './src/purchases';
+import { allowTestUnlock, buyPremium, initStore, isTestMode, restorePremium, storeAvailable } from './src/purchases';
 import { FALLBACK_PRICE_LABEL } from './src/config';
 
 const MIN_DICE = 1;
@@ -441,6 +441,7 @@ function DiceApp() {
         priceLabel={priceLabel ?? FALLBACK_PRICE_LABEL}
         busy={busy}
         testMode={isTestMode}
+        purchasable={storeAvailable || allowTestUnlock}
         onClose={() => setSheetOpen(false)}
         onSelectTheme={selectTheme}
         onUnlock={handleUnlock}
