@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       # Test APKs can unlock premium themes for free (no store keys yet).
@@ -31,29 +31,43 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: zulu
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      - name: Check Android SDK
+        run: |
+          set -o pipefail
+          {
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            ls "$ANDROID_HOME" "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" || true
+            java -version
+            node -v
+          } 2>&1 | tee -a build.log
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee -a build.log
 
       - name: Generate Android project
-        run: npx expo prebuild --platform android --no-install
+        run: |
+          set -o pipefail
+          npx expo prebuild --platform android --no-install 2>&1 | tee -a build.log
 
       - name: Build APK
-        working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          set -o pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee -a ../build.log
 
       - name: Name the APK
         id: apk
@@ -84,3 +98,14 @@ jobs:
             then open it. Allow "Install unknown apps" for your browser if asked.
 
             Premium themes unlock for free in this test build.
+
+      # On failure, surface the end of the log as a readable annotation.
+      - name: Report failure
+        if: failure()
+        run: |
+          touch build.log
+          grep -iE "error|failed|what went wrong|exception|could not" build.log | tail -n 40 > errors.txt || true
+          tail -n 40 build.log > tail.txt
+          enc() { sed -e 's/%/%25/g' -e 's/\r//g' "$1" | awk 'BEGIN{ORS="%0A"}{print}' | cut -c1-30000; }
+          echo "::error title=Build errors::$(enc errors.txt)"
+          echo "::error title=Build log tail::$(enc tail.txt)"
