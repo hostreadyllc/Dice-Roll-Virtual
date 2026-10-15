@@ -131,6 +131,10 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 34, 35]
     steps:
       - uses: actions/checkout@v5
 
@@ -148,7 +152,7 @@ jobs:
       - name: Run app on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -161,7 +165,7 @@ jobs:
           touch pid.txt pid2.txt logcat.txt logcat2.txt install.txt
           enc() { sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}' | cut -c1-30000; }
           echo "::notice title=Install::$(cat install.txt | enc)"
-          echo "::notice title=App process after launch / after tap::$(cat pid.txt pid2.txt | enc)"
+          echo "::notice title=API ${{ matrix.api-level }} app process after launch / after tap::$(cat pid.txt pid2.txt | enc)"
           grep -E "FATAL|AndroidRuntime|ReactNativeJS|E ReactNative|E/ReactNative|SoLoader|UnsatisfiedLink|Exception|libc |DEBUG   :|E/Expo|E/GL|EGL|crash" logcat2.txt | grep -v "^I/" | head -n 120 | enc > crash.txt
           echo "::warning title=Crash log::$(cat crash.txt)"
           grep -E "ReactNativeJS" logcat2.txt | tail -n 40 | enc > js.txt
@@ -173,6 +177,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -s screen.png ]; then
-            cp screen.png emulator-screenshot.png
-            gh release upload "test-build-${{ github.run_number }}" emulator-screenshot.png logcat2.txt --clobber -R "${{ github.repository }}" || true
+            cp screen.png "emulator-api${{ matrix.api-level }}.png"
+            cp logcat2.txt "logcat-api${{ matrix.api-level }}.txt"
+            gh release upload "test-build-${{ github.run_number }}" "emulator-api${{ matrix.api-level }}.png" "logcat-api${{ matrix.api-level }}.txt" --clobber -R "${{ github.repository }}" || true
           fi

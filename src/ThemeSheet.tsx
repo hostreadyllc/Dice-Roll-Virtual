@@ -26,7 +26,7 @@ type Props = {
   onSelectTheme: (t: Theme) => void;
   onUnlock: () => void;
   onRestore: () => void;
-  onToggle: (key: 'sound' | 'vibration' | 'shakeToRoll', value: boolean) => void;
+  onToggle: (key: 'sound' | 'vibration' | 'shakeToRoll' | 'use3D', value: boolean) => void;
 };
 
 function Swatch({ t, selected, locked, onPress, ui }: {
@@ -140,6 +140,7 @@ export default function ThemeSheet(p: Props) {
               ['sound', 'Sound effects'],
               ['vibration', 'Vibration'],
               ['shakeToRoll', 'Shake phone to roll'],
+              ['use3D', '3D dice'],
             ] as const).map(([key, label], i) => (
               <View key={key} style={[styles.settingRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.muted }]}>
                 <Text style={[styles.settingLabel, { color: ui.text }]}>{label}</Text>

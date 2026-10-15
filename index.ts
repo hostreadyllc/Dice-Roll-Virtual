@@ -1,9 +1,8 @@
 import './src/polyfills'; // must stay first
 import { registerRootComponent } from 'expo';
 
-import App from './App';
+import Root from './src/Root';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
-registerRootComponent(App);
+// registerRootComponent calls AppRegistry.registerComponent('main', () => Root);
+// Root loads App and shows any startup error on screen instead of closing.
+registerRootComponent(Root);

@@ -15,10 +15,52 @@ import * as Haptics from 'expo-haptics';
 import { Accelerometer } from 'expo-sensors';
 import { useAudioPlayer } from 'expo-audio';
 
-import Dice3D from './src/Dice3D';
+import Dice2D from './src/Dice2D';
 import ThemeSheet from './src/ThemeSheet';
 import { getTheme, type Theme } from './src/themes';
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './src/storage';
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  mark3DLaunchOk,
+  mark3DLaunchStarted,
+  saveSettings,
+  wasLast3DLaunchInterrupted,
+  type Settings,
+} from './src/storage';
+
+type DiceViewProps = React.ComponentProps<typeof Dice2D>;
+
+/** Load the 3D view only when it's used, so a device that can't run it still opens. */
+let Dice3DView: React.ComponentType<DiceViewProps> | null | undefined;
+function load3D(): React.ComponentType<DiceViewProps> | null {
+  if (Dice3DView === undefined) {
+    try {
+      Dice3DView = require('./src/Dice3D').default;
+    } catch (e) {
+      console.warn('3D dice unavailable', e);
+      Dice3DView = null;
+    }
+  }
+  return Dice3DView ?? null;
+}
+
+/** If the 3D view throws while rendering, show flat dice instead. */
+class Fallback3D extends React.Component<
+  { fallback: React.ReactNode; onError: () => void; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(e: unknown) {
+    console.warn('3D dice failed', e);
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 import { allowTestUnlock, buyPremium, initStore, isTestMode, restorePremium } from './src/purchases';
 import { FALLBACK_PRICE_LABEL } from './src/config';
 
@@ -53,6 +95,7 @@ function DiceApp() {
   const [storePremium, setStorePremium] = useState(false);
   const [priceLabel, setPriceLabel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notice3D, setNotice3D] = useState(false);
 
   const rattleSound = useAudioPlayer(require('./assets/sounds/rattle.wav'));
   const landSound = useAudioPlayer(require('./assets/sounds/land.wav'));
@@ -66,17 +109,34 @@ function DiceApp() {
 
   // ---------- Load saved settings + store status ----------
   useEffect(() => {
-    loadSettings().then((s) => {
+    (async () => {
+      let s = await loadSettings();
+      if (s.use3D && (await wasLast3DLaunchInterrupted())) {
+        // The app closed while starting 3D last time: use flat dice instead.
+        s = { ...s, use3D: false };
+        saveSettings(s);
+        await mark3DLaunchOk();
+        setNotice3D(true);
+      }
+      if (s.use3D) await mark3DLaunchStarted();
       setSettings(s);
       setValues(Array.from({ length: s.diceCount }, randomFace));
       setHeld(Array(s.diceCount).fill(false));
       setLoaded(true);
-    });
+    })();
     initStore(setStorePremium).then(({ premium: p, priceLabel: price }) => {
       setStorePremium(p);
       setPriceLabel(price);
     });
   }, []);
+
+  // 3D has been running fine for a while: clear the crash guard.
+  useEffect(() => {
+    if (!loaded || !settings.use3D) return;
+    mark3DLaunchStarted(); // also covers turning 3D back on in settings
+    const t = setTimeout(mark3DLaunchOk, 6000);
+    return () => clearTimeout(t);
+  }, [loaded, settings.use3D]);
 
   const update = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {
@@ -288,15 +348,32 @@ function DiceApp() {
 
         {/* Dice */}
         <View style={styles.diceArea}>
-          <Dice3D
-            values={values}
-            held={held}
-            tumbling={tumbling}
-            landKey={landKey}
-            theme={theme}
-            onToggleHold={toggleHold}
-            onBackgroundPress={roll}
-          />
+          {(() => {
+            const props: DiceViewProps = {
+              values,
+              held,
+              tumbling,
+              landKey,
+              theme,
+              onToggleHold: toggleHold,
+              onBackgroundPress: roll,
+            };
+            const flat = <Dice2D {...props} />;
+            const Dice3D = settings.use3D ? load3D() : null;
+            if (!Dice3D) return flat;
+            return (
+              <Fallback3D fallback={flat} onError={() => { update({ use3D: false }); mark3DLaunchOk(); setNotice3D(true); }}>
+                <Dice3D {...props} />
+              </Fallback3D>
+            );
+          })()}
+          {notice3D && (
+            <Pressable onPress={() => setNotice3D(false)} style={[styles.notice, { backgroundColor: theme.card }]}>
+              <Text style={[styles.noticeText, { color: theme.text }]}>
+                3D dice are off on this phone so the app runs smoothly. You can try turning them back on in 🎨 settings.
+              </Text>
+            </Pressable>
+          )}
           <Text style={[styles.hint, { color: theme.muted }]}>
             {n > 1 ? 'Tap a die to hold it · ' : ''}
             {settings.shakeToRoll && Platform.OS !== 'web' ? 'Shake your phone or tap ROLL' : 'Tap ROLL to roll'}
@@ -430,4 +507,6 @@ const styles = StyleSheet.create({
   },
   rollText: { fontSize: 22, fontWeight: '900', letterSpacing: 3 },
   reset: { fontSize: 13, fontWeight: '600', marginTop: 12, textDecorationLine: 'underline' },
+  notice: { marginHorizontal: 24, marginBottom: 8, borderRadius: 14, padding: 12 },
+  noticeText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });

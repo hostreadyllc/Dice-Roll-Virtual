@@ -7,6 +7,8 @@ export type Settings = {
   sound: boolean;
   vibration: boolean;
   shakeToRoll: boolean;
+  /** Real 3D dice (turned off automatically if the device can't run them). */
+  use3D: boolean;
   /** Local unlock used only in test mode (development builds without store keys). */
   testPremium: boolean;
 };
@@ -17,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   vibration: true,
   shakeToRoll: true,
+  use3D: true,
   testPremium: false,
 };
 
@@ -37,4 +40,31 @@ export async function saveSettings(s: Settings): Promise<void> {
   } catch {
     // Non-critical: settings simply won't persist this time.
   }
+}
+
+// ---------------------------------------------------------------------------
+// Crash guard for 3D: set a flag before starting the 3D view and clear it once
+// it has run for a few seconds. If the flag is still set on the next launch,
+// the app closed while starting 3D, so we fall back to flat dice.
+// ---------------------------------------------------------------------------
+const LAUNCH_KEY = 'dice-3d-launch-pending';
+
+export async function wasLast3DLaunchInterrupted(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(LAUNCH_KEY)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function mark3DLaunchStarted(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LAUNCH_KEY, '1');
+  } catch {}
+}
+
+export async function mark3DLaunchOk(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(LAUNCH_KEY);
+  } catch {}
 }
