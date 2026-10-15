@@ -26,8 +26,8 @@ jobs:
       # Test APKs can unlock premium themes for free (no store keys yet).
       EXPO_PUBLIC_ALLOW_TEST_UNLOCK: '1'
       NODE_ENV: production
-      # Build for real phones only (smaller APK, faster build).
-      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a,armeabi-v7a
+      # Real phones (arm) plus x86_64 so the emulator test can run it.
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a,armeabi-v7a,x86_64
       GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
 
     steps:
@@ -81,7 +81,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.apk.outputs.name }}
+          name: apk
           path: ${{ steps.apk.outputs.name }}
 
       - name: Publish to Releases
@@ -109,3 +109,54 @@ jobs:
           enc() { sed -e 's/%/%25/g' -e 's/\r//g' "$1" | awk 'BEGIN{ORS="%0A"}{print}' | cut -c1-30000; }
           echo "::error title=Build errors::$(enc errors.txt)"
           echo "::error title=Build log tail::$(enc tail.txt)"
+
+  # Opens the APK on an Android emulator and reports whether it starts.
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run app on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/scripts/smoke-test.sh "$(ls apk/*.apk | head -n 1)"
+
+      - name: Report result
+        if: always()
+        run: |
+          touch pid.txt pid2.txt logcat.txt logcat2.txt install.txt
+          enc() { sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"}{print}' | cut -c1-30000; }
+          echo "::notice title=Install::$(cat install.txt | enc)"
+          echo "::notice title=App process after launch / after tap::$(cat pid.txt pid2.txt | enc)"
+          grep -E "FATAL|AndroidRuntime|ReactNativeJS|E ReactNative|E/ReactNative|SoLoader|UnsatisfiedLink|Exception|libc |DEBUG   :|E/Expo|E/GL|EGL|crash" logcat2.txt | grep -v "^I/" | head -n 120 | enc > crash.txt
+          echo "::warning title=Crash log::$(cat crash.txt)"
+          grep -E "ReactNativeJS" logcat2.txt | tail -n 40 | enc > js.txt
+          echo "::notice title=JS log::$(cat js.txt)"
+
+      - name: Attach screenshot to the release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s screen.png ]; then
+            cp screen.png emulator-screenshot.png
+            gh release upload "test-build-${{ github.run_number }}" emulator-screenshot.png logcat2.txt --clobber -R "${{ github.repository }}" || true
+          fi
