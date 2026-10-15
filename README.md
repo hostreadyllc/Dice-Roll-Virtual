@@ -4,9 +4,9 @@ A simple, polished dice app for iOS and Android, built with Expo (React Native).
 
 ## Features
 
-- Roll 1–6 dice with a tumble animation
-- Rolling sound effect and vibration (each can be turned off)
-- Shake the phone to roll
+- Real 3D dice (rounded cubes with lighting, shine and shadows) that tumble and land on the result
+- Roll with the **ROLL** button, by tapping the table, or by **shaking the phone** — the dice keep rattling for as long as you shake and land when you stop
+- Rattle and landing sounds plus vibration (each can be turned off)
 - Tap a die to **hold** it between rolls (great for Yahtzee-style games)
 - Running total and roll history
 - 4 free themes + 8 premium themes, unlocked with a one-time in-app purchase
@@ -17,13 +17,13 @@ A simple, polished dice app for iOS and Android, built with Expo (React Native).
 | File | What it does |
 |---|---|
 | `App.tsx` | Main screen: dice, roll button, history, shake detection, sound and vibration |
-| `src/Die.tsx` | One die with pips and the roll animation |
+| `src/Dice3D.tsx` | The 3D dice scene: cubes, pips, lighting, tumbling and landing |
 | `src/ThemeSheet.tsx` | Theme picker, premium unlock card and settings |
-| `src/themes.ts` | All themes — add or edit colors here |
+| `src/themes.ts` | All themes — colors plus each theme's 3D material (glossy, metallic, glass, glowing pips) |
 | `src/purchases.ts` | In-app purchase logic (RevenueCat) |
 | `src/config.ts` | **Your store keys and fallback price go here** |
 | `src/storage.ts` | Saves settings on the device |
-| `assets/sounds/` | Roll and tap sound effects (original, royalty-free) |
+| `assets/sounds/` | Rattle, landing and tap sound effects (original, royalty-free) |
 
 ## Run it on your phone
 

@@ -20,6 +20,16 @@ export type Theme = {
   card: string;
   /** Status bar icon style */
   statusBar: 'light' | 'dark';
+  /** 3D die material */
+  die3d: {
+    body: string;
+    roughness: number;
+    metalness: number;
+    clearcoat: number;
+    opacity?: number;
+    /** Pips glow (unlit, bright) instead of being painted */
+    pipGlow?: boolean;
+  };
 };
 
 export const THEMES: Theme[] = [
@@ -38,6 +48,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.65)',
     statusBar: 'dark',
+    die3d: { body: '#FBF9F4', roughness: 0.35, metalness: 0, clearcoat: 0.6 },
   },
   {
     id: 'midnight',
@@ -53,6 +64,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.06)',
     statusBar: 'light',
+    die3d: { body: '#262C3E', roughness: 0.3, metalness: 0.1, clearcoat: 0.8 },
   },
   {
     id: 'mint',
@@ -68,6 +80,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.6)',
     statusBar: 'dark',
+    die3d: { body: '#F4FCF8', roughness: 0.35, metalness: 0, clearcoat: 0.6 },
   },
   {
     id: 'sunset',
@@ -83,6 +96,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.35)',
     statusBar: 'dark',
+    die3d: { body: '#FFF1E6', roughness: 0.35, metalness: 0, clearcoat: 0.6 },
   },
 
   // ---------- Premium ----------
@@ -100,6 +114,7 @@ export const THEMES: Theme[] = [
     onAccent: '#1A0533',
     card: 'rgba(255,43,214,0.10)',
     statusBar: 'light',
+    die3d: { body: '#24083F', roughness: 0.25, metalness: 0.2, clearcoat: 1, pipGlow: true },
   },
   {
     id: 'gold',
@@ -115,6 +130,7 @@ export const THEMES: Theme[] = [
     onAccent: '#1B1712',
     card: 'rgba(226,185,87,0.10)',
     statusBar: 'light',
+    die3d: { body: '#EDC768', roughness: 0.3, metalness: 0.35, clearcoat: 0.8 },
   },
   {
     id: 'ocean',
@@ -130,6 +146,7 @@ export const THEMES: Theme[] = [
     onAccent: '#06303F',
     card: 'rgba(255,255,255,0.10)',
     statusBar: 'light',
+    die3d: { body: '#BFEAF6', roughness: 0.08, metalness: 0, clearcoat: 1, opacity: 0.82 },
   },
   {
     id: 'wood',
@@ -145,6 +162,7 @@ export const THEMES: Theme[] = [
     onAccent: '#22170F',
     card: 'rgba(243,227,200,0.08)',
     statusBar: 'light',
+    die3d: { body: '#D9BC92', roughness: 0.7, metalness: 0, clearcoat: 0.15 },
   },
   {
     id: 'candy',
@@ -160,6 +178,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.55)',
     statusBar: 'dark',
+    die3d: { body: '#FFF4FA', roughness: 0.25, metalness: 0, clearcoat: 1 },
   },
   {
     id: 'galaxy',
@@ -175,6 +194,7 @@ export const THEMES: Theme[] = [
     onAccent: '#1A1040',
     card: 'rgba(255,255,255,0.07)',
     statusBar: 'light',
+    die3d: { body: '#2E2070', roughness: 0.2, metalness: 0.3, clearcoat: 1, pipGlow: true },
   },
   {
     id: 'lava',
@@ -190,6 +210,7 @@ export const THEMES: Theme[] = [
     onAccent: '#1A0602',
     card: 'rgba(255,90,31,0.10)',
     statusBar: 'light',
+    die3d: { body: '#161616', roughness: 0.3, metalness: 0.2, clearcoat: 0.9, pipGlow: true },
   },
   {
     id: 'arctic',
@@ -205,6 +226,7 @@ export const THEMES: Theme[] = [
     onAccent: '#FFFFFF',
     card: 'rgba(255,255,255,0.7)',
     statusBar: 'dark',
+    die3d: { body: '#F7FBFF', roughness: 0.15, metalness: 0, clearcoat: 1 },
   },
 ];
 

@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -16,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Accelerometer } from 'expo-sensors';
 import { useAudioPlayer } from 'expo-audio';
 
-import Die from './src/Die';
+import Dice3D from './src/Dice3D';
 import ThemeSheet from './src/ThemeSheet';
 import { getTheme, type Theme } from './src/themes';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './src/storage';
@@ -25,8 +24,16 @@ import { FALLBACK_PRICE_LABEL } from './src/config';
 
 const MIN_DICE = 1;
 const MAX_DICE = 6;
-const ROLL_MS = 650;
-const SHAKE_THRESHOLD_G = 1.8;
+/** Acceleration (in g) that starts a shake roll. */
+const SHAKE_START_G = 1.8;
+/** While already shaking, smaller movements keep the dice in the air. */
+const SHAKE_KEEP_G = 1.3;
+/** Dice land this long after the shaking stops. */
+const SHAKE_SETTLE_MS = 450;
+/** A ROLL-button tap tumbles this long before landing. */
+const BUTTON_TUMBLE_MS = 550;
+/** Time from landing start until every die is at rest. */
+const LAND_MS = 950;
 
 type HistoryItem = { id: number; values: number[]; total: number };
 
@@ -34,12 +41,12 @@ const randomFace = () => 1 + Math.floor(Math.random() * 6);
 const canVibrate = Platform.OS !== 'web';
 
 function DiceApp() {
-  const { width } = useWindowDimensions();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const [values, setValues] = useState<number[]>([randomFace(), randomFace()]);
   const [held, setHeld] = useState<boolean[]>([false, false]);
-  const [rollKey, setRollKey] = useState(0);
+  const [tumbling, setTumbling] = useState(false);
+  const [landKey, setLandKey] = useState(0);
   const [rolling, setRolling] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -47,7 +54,8 @@ function DiceApp() {
   const [priceLabel, setPriceLabel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const rollSound = useAudioPlayer(require('./assets/sounds/roll.wav'));
+  const rattleSound = useAudioPlayer(require('./assets/sounds/rattle.wav'));
+  const landSound = useAudioPlayer(require('./assets/sounds/land.wav'));
   const tapSound = useAudioPlayer(require('./assets/sounds/tap.wav'));
 
   const premium = storePremium || (isTestMode && __DEV__ && settings.testPremium);
@@ -78,6 +86,10 @@ function DiceApp() {
     });
   }, []);
 
+  // Latest values for timers and sensor callbacks.
+  const live = useRef({ settings, held, values });
+  live.current = { settings, held, values };
+
   // ---------- Feedback ----------
   const playTap = useCallback(() => {
     if (settings.sound) {
@@ -87,67 +99,107 @@ function DiceApp() {
     if (settings.vibration && canVibrate) Haptics.selectionAsync();
   }, [settings.sound, settings.vibration, tapSound]);
 
-  // ---------- Rolling ----------
-  const rollingRef = useRef(false);
-  const valuesRef = useRef(values);
-  valuesRef.current = values;
-  const roll = useCallback(() => {
-    if (rollingRef.current) return;
-    if (held.every(Boolean)) {
-      playTap();
-      return;
-    }
-    rollingRef.current = true;
+  // ---------- Rolling: tumble in the air, then land ----------
+  const phase = useRef<'idle' | 'tumbling' | 'landing'>('idle');
+  const rattleTicker = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** Start the dice tumbling. Returns false if nothing can roll. */
+  const startTumble = useCallback((): boolean => {
+    if (phase.current !== 'idle') return false;
+    const { settings: s, held: h } = live.current;
+    if (h.every(Boolean)) return false;
+    phase.current = 'tumbling';
     setRolling(true);
-    setRollKey((k) => k + 1);
+    setTumbling(true);
 
-    if (settings.sound) {
-      rollSound.seekTo(0);
-      rollSound.play();
+    if (s.sound) {
+      rattleSound.loop = true;
+      rattleSound.seekTo(0);
+      rattleSound.play();
     }
-    if (settings.vibration && canVibrate) {
+    if (s.vibration && canVibrate) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      // Light ticks feel like dice knocking together in your hand.
+      rattleTicker.current = setInterval(() => Haptics.selectionAsync(), 110);
     }
+    return true;
+  }, [rattleSound]);
 
-    // Flicker faces while tumbling.
-    const flicker = setInterval(() => {
-      setValues((v) => v.map((x, i) => (held[i] ? x : randomFace())));
-      if (settings.vibration && canVibrate) Haptics.selectionAsync();
-    }, 90);
+  /** Pick the results and drop the dice onto the table. */
+  const land = useCallback(() => {
+    if (phase.current !== 'tumbling') return;
+    phase.current = 'landing';
+    const { settings: s, held: h, values: v } = live.current;
+    if (rattleTicker.current) clearInterval(rattleTicker.current);
+    rattleTicker.current = null;
+    rattleSound.pause();
+
+    const final = v.map((x, i) => (h[i] ? x : randomFace()));
+    setValues(final);
+    setTumbling(false);
+    setLandKey((k) => k + 1);
+
+    // Sound and thud timed to when the dice hit the table.
+    setTimeout(() => {
+      if (s.sound) {
+        landSound.seekTo(0);
+        landSound.play();
+      }
+      if (s.vibration && canVibrate) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }, 300);
 
     setTimeout(() => {
-      clearInterval(flicker);
-      const final = valuesRef.current.map((x, i) => (held[i] ? x : randomFace()));
-      setValues(final);
-      setHistory((h) => [
+      setHistory((hist) => [
         { id: Date.now(), values: final, total: final.reduce((a, b) => a + b, 0) },
-        ...h,
+        ...hist,
       ].slice(0, 30));
-      if (settings.vibration && canVibrate) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }
-      rollingRef.current = false;
+      phase.current = 'idle';
       setRolling(false);
-    }, ROLL_MS);
-  }, [held, settings.sound, settings.vibration, rollSound, playTap]);
+    }, LAND_MS);
+  }, [rattleSound, landSound]);
 
-  // ---------- Shake to roll ----------
-  const rollRef = useRef(roll);
-  rollRef.current = roll;
+  /** ROLL button / tapping the table. */
+  const roll = useCallback(() => {
+    if (!startTumble()) {
+      if (phase.current === 'idle') playTap(); // all dice held
+      return;
+    }
+    setTimeout(land, BUTTON_TUMBLE_MS);
+  }, [startTumble, land, playTap]);
+
+  // ---------- Shake to roll: dice rattle for as long as you shake ----------
   useEffect(() => {
     if (!settings.shakeToRoll || sheetOpen || Platform.OS === 'web') return;
-    let lastShake = 0;
-    Accelerometer.setUpdateInterval(100);
+    let shaking = false;
+    let landAt = 0;
+    Accelerometer.setUpdateInterval(60);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       const g = Math.sqrt(x * x + y * y + z * z);
       const now = Date.now();
-      if (g > SHAKE_THRESHOLD_G && now - lastShake > 1200) {
-        lastShake = now;
-        rollRef.current();
+      if (!shaking && g > SHAKE_START_G && startTumble()) {
+        shaking = true;
+        landAt = now + SHAKE_SETTLE_MS;
+      } else if (shaking && Math.abs(g - 1) > SHAKE_KEEP_G - 1) {
+        landAt = now + SHAKE_SETTLE_MS;
       }
     });
-    return () => sub.remove();
-  }, [settings.shakeToRoll, sheetOpen]);
+    const check = setInterval(() => {
+      if (shaking && Date.now() > landAt) {
+        shaking = false;
+        land();
+      }
+    }, 50);
+    return () => {
+      sub.remove();
+      clearInterval(check);
+      if (shaking) land();
+    };
+  }, [settings.shakeToRoll, sheetOpen, startTumble, land]);
+
+  // Stop sounds and ticks if the app closes mid-roll.
+  useEffect(() => () => {
+    if (rattleTicker.current) clearInterval(rattleTicker.current);
+  }, []);
 
   // ---------- Dice count + hold ----------
   const changeCount = (delta: number) => {
@@ -208,10 +260,6 @@ function DiceApp() {
 
   // ---------- Layout ----------
   const n = settings.diceCount;
-  const perRow = n === 1 ? 1 : n <= 4 ? 2 : 3;
-  const gap = 22;
-  const maxSize = n === 1 ? 170 : n <= 4 ? 128 : 96;
-  const dieSize = Math.min(maxSize, (Math.min(width, 520) - 48 - gap * (perRow - 1)) / perRow);
   const total = values.reduce((a, b) => a + b, 0);
 
   if (!loaded) return <View style={{ flex: 1, backgroundColor: theme.background[1] }} />;
@@ -239,25 +287,21 @@ function DiceApp() {
         </View>
 
         {/* Dice */}
-        <Pressable style={styles.diceArea} onPress={roll} accessibilityLabel="Roll the dice">
-          <View style={[styles.diceGrid, { maxWidth: perRow * dieSize + (perRow - 1) * gap, gap }]}>
-            {values.map((v, i) => (
-              <Die
-                key={i}
-                value={v}
-                size={dieSize}
-                theme={theme}
-                held={held[i]}
-                rollKey={rollKey}
-                onPress={() => toggleHold(i)}
-              />
-            ))}
-          </View>
+        <View style={styles.diceArea}>
+          <Dice3D
+            values={values}
+            held={held}
+            tumbling={tumbling}
+            landKey={landKey}
+            theme={theme}
+            onToggleHold={toggleHold}
+            onBackgroundPress={roll}
+          />
           <Text style={[styles.hint, { color: theme.muted }]}>
             {n > 1 ? 'Tap a die to hold it · ' : ''}
-            {settings.shakeToRoll && Platform.OS !== 'web' ? 'Shake or tap to roll' : 'Tap to roll'}
+            {settings.shakeToRoll && Platform.OS !== 'web' ? 'Shake your phone or tap ROLL' : 'Tap ROLL to roll'}
           </Text>
-        </Pressable>
+        </View>
 
         {/* History */}
         <View style={styles.historyWrap}>
@@ -351,9 +395,8 @@ const styles = StyleSheet.create({
   total: { fontSize: 52, fontWeight: '900', lineHeight: 58, fontVariant: ['tabular-nums'] },
   iconBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   iconText: { fontSize: 22 },
-  diceArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  diceGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
-  hint: { fontSize: 13, marginTop: 18, fontWeight: '500' },
+  diceArea: { flex: 1, alignItems: 'center' },
+  hint: { fontSize: 13, marginBottom: 6, fontWeight: '500' },
   historyWrap: { height: 64 },
   history: { paddingHorizontal: 24, gap: 8, alignItems: 'center' },
   historyEmpty: { fontSize: 13 },
