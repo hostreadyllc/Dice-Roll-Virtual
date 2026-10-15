@@ -9,6 +9,11 @@ name: Build Android APK
 on:
   push:
     branches: [main]
+    # Website, store images and docs don't change the app.
+    paths-ignore:
+      - 'docs/**'
+      - 'store/**'
+      - '**.md'
   workflow_dispatch:
 
 permissions:
