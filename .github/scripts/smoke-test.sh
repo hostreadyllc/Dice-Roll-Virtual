@@ -13,7 +13,9 @@ cat pid.txt
 adb exec-out screencap -p > screen.png || true
 adb logcat -d -v brief > logcat.txt 2>&1
 # Try a roll by tapping the bottom-centre (ROLL button) and check it survives.
-adb shell input tap 540 2150 || true
+SIZE=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -n1)
+W=${SIZE%x*}; H=${SIZE#*x}
+adb shell input tap $((W / 2)) $((H * 93 / 100)) || true
 sleep 4
 adb shell pidof "$PKG" > pid2.txt 2>&1 || echo "NOT RUNNING" > pid2.txt
 adb logcat -d -v brief > logcat2.txt 2>&1

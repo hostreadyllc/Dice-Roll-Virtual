@@ -75,6 +75,9 @@ jobs:
           VERSION=$(node -p "require('./app.json').expo.version")
           NAME="DiceRoller-v${VERSION}-build${{ github.run_number }}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$NAME"
+          # Same file under a fixed name, so .../releases/latest/download/DiceRoller.apk
+          # always gets the newest build.
+          cp "$NAME" DiceRoller.apk
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -89,8 +92,11 @@ jobs:
         with:
           tag_name: test-build-${{ github.run_number }}
           name: Test build ${{ github.run_number }} (v${{ steps.apk.outputs.version }})
-          prerelease: true
-          files: ${{ steps.apk.outputs.name }}
+          prerelease: false
+          make_latest: true
+          files: |
+            ${{ steps.apk.outputs.name }}
+            DiceRoller.apk
           body: |
             Android test APK built from ${{ github.sha }}.
 
@@ -98,6 +104,16 @@ jobs:
             then open it. Allow "Install unknown apps" for your browser if asked.
 
             Premium themes unlock for free in this test build.
+
+      - name: Remove older test builds (keep the newest 2)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list -R "${{ github.repository }}" --limit 100 --json tagName,createdAt \
+            --jq 'map(select(.tagName | startswith("test-build-"))) | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
+          while read -r tag; do
+            gh release delete "$tag" --cleanup-tag -y -R "${{ github.repository }}" || true
+          done
 
       # On failure, surface the end of the log as a readable annotation.
       - name: Report failure
