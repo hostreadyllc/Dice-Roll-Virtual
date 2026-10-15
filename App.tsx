@@ -19,7 +19,7 @@ import Dice3D from './src/Dice3D';
 import ThemeSheet from './src/ThemeSheet';
 import { getTheme, type Theme } from './src/themes';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './src/storage';
-import { buyPremium, initStore, isTestMode, restorePremium } from './src/purchases';
+import { allowTestUnlock, buyPremium, initStore, isTestMode, restorePremium } from './src/purchases';
 import { FALLBACK_PRICE_LABEL } from './src/config';
 
 const MIN_DICE = 1;
@@ -58,7 +58,7 @@ function DiceApp() {
   const landSound = useAudioPlayer(require('./assets/sounds/land.wav'));
   const tapSound = useAudioPlayer(require('./assets/sounds/tap.wav'));
 
-  const premium = storePremium || (isTestMode && __DEV__ && settings.testPremium);
+  const premium = storePremium || (allowTestUnlock && settings.testPremium);
   const theme: Theme = useMemo(() => {
     const t = getTheme(settings.themeId);
     return t.premium && !premium ? getTheme(DEFAULT_SETTINGS.themeId) : t;

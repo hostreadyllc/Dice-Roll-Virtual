@@ -1,0 +1,86 @@
+# Builds an installable Android test APK on every push to main
+# and publishes it on the repo's Releases page.
+#
+# The APK is for testing on your own phone. For Google Play, use the
+# EAS production build described in PUBLISHING.md (it makes a signed .aab).
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Test APKs can unlock premium themes for free (no store keys yet).
+      EXPO_PUBLIC_ALLOW_TEST_UNLOCK: '1'
+      NODE_ENV: production
+      # Build for real phones only (smaller APK, faster build).
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a,armeabi-v7a
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Name the APK
+        id: apk
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          NAME="DiceRoller-v${VERSION}-build${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.name }}
+
+      - name: Publish to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-build-${{ github.run_number }}
+          name: Test build ${{ github.run_number }} (v${{ steps.apk.outputs.version }})
+          prerelease: true
+          files: ${{ steps.apk.outputs.name }}
+          body: |
+            Android test APK built from ${{ github.sha }}.
+
+            **Install:** open this page on your Android phone, tap the `.apk` file to download,
+            then open it. Allow "Install unknown apps" for your browser if asked.
+
+            Premium themes unlock for free in this test build.

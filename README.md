@@ -25,7 +25,14 @@ A simple, polished dice app for iOS and Android, built with Expo (React Native).
 | `src/storage.ts` | Saves settings on the device |
 | `assets/sounds/` | Rattle, landing and tap sound effects (original, royalty-free) |
 
-## Run it on your phone
+## Install the test app (Android)
+
+Every push to `main` automatically builds an Android APK on GitHub
+(see the **Actions** tab). When it finishes, the APK appears on the repo's
+**Releases** page — open that page on your Android phone, download the `.apk`
+and open it. Premium themes unlock for free in these test builds.
+
+## Run it on your phone (for development)
 
 ```bash
 npm install

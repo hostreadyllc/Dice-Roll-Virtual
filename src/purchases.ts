@@ -29,6 +29,13 @@ const apiKey = Platform.select({
 
 export const storeAvailable = Platform.OS !== 'web' && !!apiKey;
 export const isTestMode = !storeAvailable;
+/**
+ * In test mode, may the Unlock button unlock premium themes for free?
+ * True in development, and in test APKs built with EXPO_PUBLIC_ALLOW_TEST_UNLOCK=1.
+ * Store builds have real keys, so this never applies to them.
+ */
+export const allowTestUnlock =
+  isTestMode && (__DEV__ || process.env.EXPO_PUBLIC_ALLOW_TEST_UNLOCK === '1');
 
 function hasPremium(info: CustomerInfo): boolean {
   return info.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
@@ -64,7 +71,7 @@ export async function initStore(
 export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'error';
 
 export async function buyPremium(): Promise<PurchaseResult> {
-  if (!storeAvailable) return __DEV__ ? 'purchased' : 'unavailable';
+  if (!storeAvailable) return allowTestUnlock ? 'purchased' : 'unavailable';
   if (!Purchases || !premiumPackage) return 'unavailable';
   try {
     const { customerInfo } = await Purchases.purchasePackage(premiumPackage);
