@@ -24,7 +24,7 @@ Work through these steps in order. You do **not** need a Mac — Expo's cloud se
 In `app.json`:
 
 - `expo.name` — the name under the icon (currently **Dice Roller**). Store names must be unique, so check availability first.
-- `expo.ios.bundleIdentifier` and `expo.android.package` — currently `com.hostreadyllc.diceroll`. **These can never change after publishing.**
+- `expo.android.package` — `com.ash.diceroller` (matches the app created in Play Console). `expo.ios.bundleIdentifier` — `com.hostreadyllc.diceroll`. **These can never change after publishing.**
 
 ---
 

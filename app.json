@@ -21,7 +21,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.hostreadyllc.diceroll",
+      "package": "com.ash.diceroller",
       "versionCode": 1,
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",

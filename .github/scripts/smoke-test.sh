@@ -2,7 +2,7 @@
 # Installs the APK on the emulator, opens the app, and records what happens.
 set -x
 APK="$1"
-PKG=com.hostreadyllc.diceroll
+PKG=com.ash.diceroller
 adb wait-for-device
 adb install -r "$APK" > install.txt 2>&1; cat install.txt
 adb logcat -c
